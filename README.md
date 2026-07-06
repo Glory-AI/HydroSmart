@@ -197,9 +197,242 @@ Connect the Arduino, relay module, ultrasonic sensor, turbidity sensor, pump, wa
 
 ### Software Setup
 ```bash
-git clone https://github.com/yourusername/HydroSmart.git
+git clone https://github.com/Emmydone01/HydroSmart.git
 ```
 Open `Arduino_Code/main.ino` in the Arduino IDE and upload it to the Arduino Uno.
+//library importation
+# WORKING CODE
+#include <LiquidCrystal_I2C.h>
+
+// PINS ASSIGNMENT
+// Ultrasonic Sensor
+#define TRIG 4
+#define ECHO 5
+
+
+// Water Sensor
+#define MID_LEVEL 2
+#define FULL_LEVEL 3
+
+// LEDs
+#define GREEN_LED 9
+#define RED_LED 10
+
+// PUMPs
+#define PUMP 6
+#define TAP_VALVE 8
+#define DRAIN_VALVE 7
+
+// Turbidity Sensor
+#define TURBIDITY A0
+
+// Variables
+unsigned long handDetectedTime =0;
+bool handPresent = false;
+
+// Function Declarations
+void onTap(void);
+void offTap(void);
+void onPump(void);
+void offPump(void);
+void onDrain(void);
+void offDrain(void);
+bool isWaterTurbid(void);
+int calculateDistance(void);
+void setPumpPinMode(void);
+void setLedPinMode(void);
+void setWaterSensorPinMode(void);
+void setUltrasonicSensorPinMode(void);
+void resetAllPump(void);
+void turnRedLedOnToShowTurbidity(void);
+void turnRedLedOffToShowNoTurbidity(void);
+void turnGreenLedOnToShowWaterAvailability(void);
+void turnGreenLedOffToShowNoWaterAvailability(void);
+void controlTapBasedOnDistance(int distance);
+
+
+void setup() {
+  Serial.begin(9600);
+
+  setUltrasonicSensorPinMode();
+  setWaterSensorPinMode();
+  setLedPinMode();
+  setPumpPinMode();
+
+  resetAllPump();
+}
+
+void loop() {
+  int mid, full, distance;
+
+  // Read sensors
+  mid = digitalRead(MID_LEVEL);
+  full = digitalRead(FULL_LEVEL);
+  Serial.print("Full State: ");
+  Serial.println(full);
+  Serial.print("Mid State: ");
+  Serial.println(mid);
+
+  // Water Quality Check
+  if (isWaterTurbid()) {
+
+    offPump();
+    onDrain();
+    turnRedLedOnToShowTurbidity();
+    Serial.println("Drain is on.  Water is Turbid.");
+  }
+  else {
+
+    offDrain();
+    turnRedLedOffToShowNoTurbidity();
+    Serial.println("Drain is off. Water is not Turbid");
+
+    // Tank level logic
+    if (full == HIGH) {
+      offPump();
+      turnGreenLedOnToShowWaterAvailability();
+      Serial.print("Full Sensor On. Water is full");
+    }
+    else if (mid == HIGH) {
+
+      onPump();
+      turnGreenLedOnToShowWaterAvailability();
+      Serial.println("Pump is on. Water is available but not full");
+
+    }
+    else {
+
+      onPump();
+      turnGreenLedOffToShowNoWaterAvailability();
+      Serial.println("Pump is on. Water will soon be available");
+    }
+
+    // Smart tap control
+    distance = calculateDistance();
+    Serial.print("Distance: ");
+    Serial.println(distance);
+    controlTapBasedOnDistance(distance);
+  }
+
+  delay(1000);
+}
+
+void onTap(void) {
+  digitalWrite(TAP_VALVE, LOW);
+}
+
+void offTap(void) {
+  digitalWrite(TAP_VALVE, HIGH);
+}
+
+void onPump(void) {
+  digitalWrite(PUMP, HIGH);
+}
+
+void offPump(void) {
+  digitalWrite(PUMP, LOW);
+}
+
+void onDrain(void) {
+  digitalWrite(DRAIN_VALVE, LOW);
+}
+ 
+void offDrain(void) {
+  digitalWrite(DRAIN_VALVE, HIGH);
+}
+
+bool isWaterTurbid(void) {
+  int turbidity;
+
+  turbidity = analogRead(TURBIDITY);
+  Serial.print("Turbidity: ");
+  Serial.println(turbidity);
+  if (turbidity < 900)
+    return true;
+
+  return false;
+}
+
+int calculateDistance(void) {
+  long duration;
+
+  digitalWrite(TRIG, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG, LOW);
+
+  duration = pulseIn(ECHO, HIGH);
+  delay(60);
+
+  return duration / 29 / 2;
+}
+
+void setUltrasonicSensorPinMode(void) {
+  pinMode(TRIG, OUTPUT);
+  pinMode(ECHO, INPUT);
+}
+
+void setWaterSensorPinMode(void) {
+  pinMode(MID_LEVEL, INPUT);
+  pinMode(FULL_LEVEL, INPUT);
+}
+
+void setLedPinMode(void) {
+  pinMode(GREEN_LED, OUTPUT);
+  pinMode(RED_LED, OUTPUT);
+}
+
+void setPumpPinMode(void) {
+  pinMode(PUMP, OUTPUT);
+  pinMode(TAP_VALVE, OUTPUT);
+  pinMode(DRAIN_VALVE, OUTPUT);
+}
+
+void resetAllPump(void) {
+  offPump();
+  offTap();
+  offDrain();
+}
+
+void turnRedLedOnToShowTurbidity(void) {
+  digitalWrite(RED_LED, HIGH);
+}
+
+void turnRedLedOffToShowNoTurbidity(void) {
+  digitalWrite(RED_LED, LOW);
+}
+
+void turnGreenLedOnToShowWaterAvailability(void) {
+  digitalWrite(GREEN_LED, HIGH);
+}
+
+void turnGreenLedOffToShowNoWaterAvailability(void) {
+  digitalWrite(GREEN_LED, LOW);
+}
+
+void controlTapBasedOnDistance(int distance) {
+  if (distance <= 10) {
+    Serial.println("Object Detected. Waiting for five seconds.");
+    if (!handPresent) {
+      handPresent= true;
+      handDetectedTime= millis();
+    }
+    
+    unsigned long timeDiff = millis() - handDetectedTime;
+    Serial.print("Waiting Time: ");
+    Serial.println(timeDiff);
+    if (timeDiff >= 5000) {
+      onTap();
+      Serial.println("Tap is on. Water is available");
+    }
+  }
+  else {
+    handPresent= false;
+    offTap();
+    Serial.println("tap is off.");
+  }
+}
 
 ### Pin Configuration
 
